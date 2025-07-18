@@ -109,7 +109,7 @@ class DiseaseReport(BaseModel):
 
 class PlantPlan(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    farmer_id: str
+    farmer_id: Optional[str] = None
     land_id: str
     season: str
     crops: List[str]
