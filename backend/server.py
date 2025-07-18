@@ -442,7 +442,7 @@ async def get_products(lat: Optional[float] = None, lng: Optional[float] = None,
     # If location is provided, filter by proximity
     if lat is not None and lng is not None:
         # Simple proximity filter (in a real app, you'd use geo-spatial queries)
-        products = await products_collection.find(query).to_list(100)
+        products = await products_collection.find(query, {"_id": 0}).to_list(100)
         
         # Filter by distance (simple calculation)
         nearby_products = []
@@ -458,12 +458,12 @@ async def get_products(lat: Optional[float] = None, lng: Optional[float] = None,
         
         return nearby_products
     
-    products = await products_collection.find(query).to_list(100)
+    products = await products_collection.find(query, {"_id": 0}).to_list(100)
     return products
 
 @app.get("/api/products/{product_id}")
 async def get_product(product_id: str):
-    product = await products_collection.find_one({"id": product_id})
+    product = await products_collection.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
