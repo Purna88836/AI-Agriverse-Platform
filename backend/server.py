@@ -414,7 +414,7 @@ async def get_plant_plans(current_user: dict = Depends(get_current_user)):
     if current_user["user_type"] != "farmer":
         raise HTTPException(status_code=403, detail="Only farmers can view plant plans")
     
-    plans = await plant_plans_collection.find({"farmer_id": current_user["id"]}).to_list(100)
+    plans = await plant_plans_collection.find({"farmer_id": current_user["id"]}, {"_id": 0}).to_list(100)
     return plans
 
 @app.post("/api/products")
