@@ -74,7 +74,7 @@ class UserRegister(BaseModel):
 
 class Land(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    farmer_id: str
+    farmer_id: Optional[str] = None
     name: str
     size: float  # in acres
     location: Dict[str, float]  # {"lat": 0.0, "lng": 0.0}
