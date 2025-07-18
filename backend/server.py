@@ -261,7 +261,7 @@ async def get_lands(current_user: dict = Depends(get_current_user)):
     if current_user["user_type"] != "farmer":
         raise HTTPException(status_code=403, detail="Only farmers can view lands")
     
-    lands = await lands_collection.find({"farmer_id": current_user["id"]}).to_list(100)
+    lands = await lands_collection.find({"farmer_id": current_user["id"]}, {"_id": 0}).to_list(100)
     return lands
 
 @app.post("/api/detect-disease")
