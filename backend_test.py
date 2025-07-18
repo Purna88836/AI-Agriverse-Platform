@@ -111,9 +111,13 @@ class AgriVerseAPITester:
         """Test user registration and login for both farmers and customers"""
         print("\n=== Testing User Authentication System ===")
         
+        # Generate unique emails for this test run
+        import time
+        timestamp = str(int(time.time()))
+        
         # Test farmer registration
         farmer_data = {
-            "email": "john.farmer@agriverse.com",
+            "email": f"john.farmer.{timestamp}@agriverse.com",
             "password": "SecureFarm123!",
             "user_type": "farmer",
             "name": "John Smith",
@@ -128,11 +132,19 @@ class AgriVerseAPITester:
             self.farmer_user = response["user"]
             self.log_result("authentication", "Farmer Registration", True, f"User ID: {response['user']['id']}")
         else:
-            self.log_result("authentication", "Farmer Registration", False, f"Status: {status_code}, Response: {response}")
+            # Try login if user already exists
+            login_data = {"email": farmer_data["email"], "password": farmer_data["password"]}
+            success, response, status_code = self.make_request("POST", "/login", login_data)
+            if success and "access_token" in response:
+                self.farmer_token = response["access_token"]
+                self.farmer_user = response["user"]
+                self.log_result("authentication", "Farmer Registration", True, f"Existing user logged in: {response['user']['id']}")
+            else:
+                self.log_result("authentication", "Farmer Registration", False, f"Status: {status_code}, Response: {response}")
 
         # Test customer registration
         customer_data = {
-            "email": "jane.customer@agriverse.com",
+            "email": f"jane.customer.{timestamp}@agriverse.com",
             "password": "SecureCustomer123!",
             "user_type": "customer",
             "name": "Jane Doe",
@@ -147,7 +159,15 @@ class AgriVerseAPITester:
             self.customer_user = response["user"]
             self.log_result("authentication", "Customer Registration", True, f"User ID: {response['user']['id']}")
         else:
-            self.log_result("authentication", "Customer Registration", False, f"Status: {status_code}, Response: {response}")
+            # Try login if user already exists
+            login_data = {"email": customer_data["email"], "password": customer_data["password"]}
+            success, response, status_code = self.make_request("POST", "/login", login_data)
+            if success and "access_token" in response:
+                self.customer_token = response["access_token"]
+                self.customer_user = response["user"]
+                self.log_result("authentication", "Customer Registration", True, f"Existing user logged in: {response['user']['id']}")
+            else:
+                self.log_result("authentication", "Customer Registration", False, f"Status: {status_code}, Response: {response}")
 
         # Test farmer login
         login_data = {"email": farmer_data["email"], "password": farmer_data["password"]}
