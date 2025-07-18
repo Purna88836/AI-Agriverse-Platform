@@ -84,7 +84,7 @@ class Land(BaseModel):
 
 class Product(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    farmer_id: str
+    farmer_id: Optional[str] = None
     name: str
     description: str
     price: float
