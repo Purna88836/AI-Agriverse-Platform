@@ -346,7 +346,7 @@ async def get_disease_reports(current_user: dict = Depends(get_current_user)):
     if current_user["user_type"] != "farmer":
         raise HTTPException(status_code=403, detail="Only farmers can view disease reports")
     
-    reports = await disease_reports_collection.find({"farmer_id": current_user["id"]}).to_list(100)
+    reports = await disease_reports_collection.find({"farmer_id": current_user["id"]}, {"_id": 0}).to_list(100)
     return reports
 
 @app.post("/api/plant-plan")
