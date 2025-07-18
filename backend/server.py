@@ -431,7 +431,7 @@ async def get_my_products(current_user: dict = Depends(get_current_user)):
     if current_user["user_type"] != "farmer":
         raise HTTPException(status_code=403, detail="Only farmers can view their products")
     
-    products = await products_collection.find({"farmer_id": current_user["id"]}).to_list(100)
+    products = await products_collection.find({"farmer_id": current_user["id"]}, {"_id": 0}).to_list(100)
     return products
 
 # Customer routes
