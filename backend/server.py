@@ -98,7 +98,7 @@ class Product(BaseModel):
 
 class DiseaseReport(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    farmer_id: str
+    farmer_id: Optional[str] = None
     land_id: Optional[str] = None
     crop_name: str
     image_base64: str
