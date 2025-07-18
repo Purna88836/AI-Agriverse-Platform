@@ -160,7 +160,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 # Initialize Gemini Chat
-GEMINI_API_KEY = "AIzaSyDdu3I3cZrDcOLg1vssTrXOTSyxBO2KGhk"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDdu3I3cZrDcOLg1vssTrXOTSyxBO2KGhk")
 
 def get_gemini_chat():
     return LlmChat(
