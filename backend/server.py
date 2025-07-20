@@ -47,7 +47,24 @@ ALGORITHM = "HS256"
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DATABASE_NAME = "agriverse"
 
-client = AsyncIOMotorClient(MONGO_URL)
+# Configure MongoDB client with SSL settings for Render
+try:
+    client = AsyncIOMotorClient(
+        MONGO_URL,
+        serverSelectionTimeoutMS=10000,
+        ssl=True,
+        ssl_cert_reqs='CERT_NONE',
+        tlsAllowInvalidCertificates=True,
+        tlsInsecure=True
+    )
+    # Test the connection
+    client.admin.command('ping')
+    print("✅ MongoDB connection successful!")
+except Exception as e:
+    print(f"❌ MongoDB connection failed: {e}")
+    # Fallback connection without SSL for development
+    client = AsyncIOMotorClient(MONGO_URL)
+    
 db = client[DATABASE_NAME]
 
 # Collections
