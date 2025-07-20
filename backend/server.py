@@ -52,10 +52,7 @@ try:
     client = AsyncIOMotorClient(
         MONGO_URL,
         serverSelectionTimeoutMS=10000,
-        ssl=True,
-        ssl_cert_reqs='CERT_NONE',
-        tlsAllowInvalidCertificates=True,
-        tlsInsecure=True
+        tlsAllowInvalidCertificates=True
     )
     # Test the connection
     client.admin.command('ping')
