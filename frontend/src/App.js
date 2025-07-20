@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { ShoppingCart, MessageCircle } from 'lucide-react';
 import './App.css';
+import EnhancedLandManagement from './components/EnhancedLandManagement';
+import LandDetailsDashboard from './components/LandDetailsDashboard';
+import AIEnhancedCropPlanning from './components/AIEnhancedCropPlanning';
+import EnhancedMarketplace from './components/EnhancedMarketplace';
+import AIChatAssistant from './components/AIChatAssistant';
 
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -21,6 +28,11 @@ function App() {
   const [products, setProducts] = useState([]);
   const [diseaseReports, setDiseaseReports] = useState([]);
   const [plantPlans, setPlantPlans] = useState([]);
+  const [cropSchedules, setCropSchedules] = useState([]);
+  const [selectedLand, setSelectedLand] = useState(null);
+  const [showLandDashboard, setShowLandDashboard] = useState(false);
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
   const [newLand, setNewLand] = useState({
     name: '', size: '', soil_type: '', location: { lat: 0, lng: 0 }, crops: []
   });
@@ -45,6 +57,26 @@ function App() {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
+  // Add auto-dismiss for success messages
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Add auto-dismiss for error messages
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('');
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -66,24 +98,30 @@ function App() {
   }, []);
 
   useEffect(() => {
+    console.log('🔄 User state changed:', user ? user.user_type : 'null');
     if (user) {
       if (user.user_type === 'farmer') {
+        console.log('🌾 Fetching farmer data...');
         fetchFarmerData();
       } else {
+        console.log('🛒 Fetching customer data...');
         fetchCustomerData();
       }
     }
   }, [user]);
 
   const fetchProfile = async (token) => {
+    console.log('🔄 Fetching user profile...');
     try {
       const response = await fetch(`${API_BASE_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.ok) {
         const userData = await response.json();
+        console.log('✅ User profile loaded:', userData.user_type);
         setUser(userData);
       } else {
+        console.log('❌ Profile fetch failed, removing token');
         localStorage.removeItem('token');
       }
     } catch (error) {
@@ -98,8 +136,9 @@ function App() {
       const landsResponse = await fetch(`${API_BASE_URL}/api/lands`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      let landsData = [];
       if (landsResponse.ok) {
-        const landsData = await landsResponse.json();
+        landsData = await landsResponse.json();
         setLands(landsData);
       }
 
@@ -129,6 +168,24 @@ function App() {
         const plansData = await plansResponse.json();
         setPlantPlans(plansData);
       }
+
+      // Fetch crop schedules for all lands
+      if (landsData.length > 0) {
+        console.log('🔄 Fetching crop schedules for', landsData.length, 'lands');
+        const schedulesPromises = landsData.map(land => 
+          fetch(`${API_BASE_URL}/api/crop-schedules/${land.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(res => res.ok ? res.json() : [])
+        );
+        
+        const schedulesResults = await Promise.all(schedulesPromises);
+        const allSchedules = schedulesResults.flat();
+        console.log('📋 Total crop schedules loaded:', allSchedules.length);
+        setCropSchedules(allSchedules);
+      } else {
+        console.log('⚠️ No lands found, skipping crop schedule fetch');
+        setCropSchedules([]);
+      }
     } catch (error) {
       console.error('Farmer data fetch error:', error);
     }
@@ -148,6 +205,107 @@ function App() {
     }
   };
 
+  // Function to refresh crop schedules for a specific land
+  const refreshCropSchedules = async (landId) => {
+    console.log('🔄 Refreshing crop schedules for land:', landId);
+    const token = localStorage.getItem('token');
+    try {
+      // Fetch both crop schedules and cultivation cycles
+      const [schedulesResponse, cyclesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/crop-schedules/${landId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE_URL}/api/cultivation-cycles/${landId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      
+      let allSchedules = [];
+      
+      // Process crop schedules
+      if (schedulesResponse.ok) {
+        const cropSchedules = await schedulesResponse.json();
+        console.log('📋 Crop schedules received for land', landId, ':', cropSchedules.length, 'schedules');
+        allSchedules.push(...cropSchedules);
+      } else {
+        console.error('❌ Failed to fetch crop schedules, status:', schedulesResponse.status);
+      }
+      
+      // Process cultivation cycles
+      if (cyclesResponse.ok) {
+        const cultivationCycles = await cyclesResponse.json();
+        console.log('🌾 Cultivation cycles received for land', landId, ':', cultivationCycles.length, 'cycles');
+        
+        // Convert cultivation cycles to schedule format for compatibility
+        const convertedCycles = cultivationCycles.map(cycle => {
+          // For cultivation cycles, we'll use calendar days since they don't have task-based progress
+          let daysElapsed = 0;
+          if (cycle.start_date) {
+            try {
+              const startDate = new Date(cycle.start_date);
+              const today = new Date();
+              const timeDiff = today.getTime() - startDate.getTime();
+              daysElapsed = Math.floor(timeDiff / (1000 * 3600 * 24));
+            } catch (e) {
+              console.log('Error calculating days elapsed:', e);
+            }
+          }
+          
+          // Determine current stage based on days elapsed and status
+          let currentStage = cycle.status;
+          if (cycle.status === 'active') {
+            if (daysElapsed < 7) {
+              currentStage = 'Germination';
+            } else if (daysElapsed < 30) {
+              currentStage = 'Vegetative';
+            } else if (daysElapsed < 60) {
+              currentStage = 'Flowering';
+            } else if (daysElapsed < 90) {
+              currentStage = 'Fruiting';
+            } else {
+              currentStage = 'Harvest Ready';
+            }
+          } else if (cycle.status === 'completed') {
+            currentStage = 'Harvested';
+          }
+          
+          return {
+            ...cycle,
+            // Map cycle fields to schedule fields
+            active: cycle.status === 'active',
+            current_stage: currentStage,
+            days_elapsed: daysElapsed,
+            schedule: [] // Cycles don't have tasks in the same format
+          };
+        });
+        
+        allSchedules.push(...convertedCycles);
+      } else {
+        console.error('❌ Failed to fetch cultivation cycles, status:', cyclesResponse.status);
+      }
+      
+      // Log all schedules
+      allSchedules.forEach(schedule => {
+        console.log(`  - ${schedule.crop_name} (${schedule.active ? 'ACTIVE' : 'inactive'}) - Stage: ${schedule.current_stage}`);
+        if (schedule.schedule) {
+          const completedTasks = schedule.schedule.filter(task => task.completed || task.skipped).length;
+          const totalTasks = schedule.schedule.length;
+          console.log(`    Tasks: ${completedTasks}/${totalTasks} completed/skipped`);
+        }
+      });
+      
+      setCropSchedules(prev => {
+        // Remove old schedules for this land and add new ones
+        const filtered = prev.filter(schedule => schedule.land_id !== landId);
+        const updated = [...filtered, ...allSchedules];
+        console.log('📊 Updated crop schedules total:', updated.length);
+        return updated;
+      });
+    } catch (error) {
+      console.error('Error refreshing crop schedules:', error);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -164,7 +322,7 @@ function App() {
         localStorage.setItem('token', data.access_token);
         setUser(data.user);
         setCurrentView('dashboard');
-        setSuccess('Login successful!');
+        setSuccess(`Welcome back, ${data.user.name}! 🎉 You're now logged in to AgriVerse.`);
       } else {
         const errorData = await response.json();
         setError(errorData.detail || 'Login failed');
@@ -191,7 +349,7 @@ function App() {
         localStorage.setItem('token', data.access_token);
         setUser(data.user);
         setCurrentView('dashboard');
-        setSuccess('Registration successful!');
+        setSuccess(`Welcome to AgriVerse, ${data.user.name}! 🌾 Your account has been created successfully.`);
       } else {
         const errorData = await response.json();
         setError(errorData.detail || 'Registration failed');
@@ -241,7 +399,7 @@ function App() {
         const landData = await response.json();
         setLands([...lands, landData]);
         setNewLand({ name: '', size: '', soil_type: '', location: { lat: 0, lng: 0 }, crops: [] });
-        setSuccess('Land added successfully!');
+        setSuccess(`🌱 Land "${landData.name}" added successfully! You can now start planning your crops.`);
       } else {
         setError('Failed to add land');
       }
@@ -275,7 +433,7 @@ function App() {
           name: '', description: '', price: '', unit: 'kg', quantity: '', category: '',
           location: { lat: 0, lng: 0 }, image_base64: ''
         });
-        setSuccess('Product added successfully!');
+        setSuccess(`🛒 Product "${productData.name}" added to marketplace successfully!`);
       } else {
         setError('Failed to add product');
       }
@@ -302,7 +460,7 @@ function App() {
         const reportData = await response.json();
         setDiseaseReports([reportData, ...diseaseReports]);
         setDiseaseForm({ crop_name: '', land_id: '', image_base64: '' });
-        setSuccess('Disease detection completed!');
+        setSuccess(`🔬 Disease detection completed! Check your reports for detailed analysis.`);
       } else {
         setError('Failed to detect disease');
       }
@@ -332,7 +490,7 @@ function App() {
         const planData = await response.json();
         setPlantPlans([planData, ...plantPlans]);
         setPlantPlanForm({ land_id: '', season: 'spring', preferred_crops: [], goals: '' });
-        setSuccess('Plant plan created successfully!');
+        setSuccess(`📋 Plant plan created successfully! Your AI-powered farming strategy is ready.`);
       } else {
         setError('Failed to create plant plan');
       }
@@ -492,273 +650,96 @@ function App() {
     </div>
   );
 
-  const renderFarmerDashboard = () => (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
-        <h1>Welcome, {user?.name}!</h1>
-        <div className="dashboard-nav">
-          <button 
-            onClick={() => setCurrentView('lands')} 
-            className={currentView === 'lands' ? 'nav-btn active' : 'nav-btn'}
-          >
-            My Lands
-          </button>
-          <button 
-            onClick={() => setCurrentView('products')} 
-            className={currentView === 'products' ? 'nav-btn active' : 'nav-btn'}
-          >
-            My Products
-          </button>
-          <button 
-            onClick={() => setCurrentView('disease-detection')} 
-            className={currentView === 'disease-detection' ? 'nav-btn active' : 'nav-btn'}
-          >
-            Disease Detection
-          </button>
-          <button 
-            onClick={() => setCurrentView('plant-planning')} 
-            className={currentView === 'plant-planning' ? 'nav-btn active' : 'nav-btn'}
-          >
-            Plant Planning
-          </button>
+  const renderFarmerDashboard = () => {
+    // Show marketplace
+    if (showMarketplace) {
+      return (
+        <EnhancedMarketplace
+          user={user}
+          onBack={() => setShowMarketplace(false)}
+        />
+      );
+    }
+
+    // If a land is selected, show the land dashboard
+    if (showLandDashboard && selectedLand) {
+      return (
+        <LandDetailsDashboard
+          selectedLand={selectedLand}
+          cropSchedules={cropSchedules.filter(schedule => schedule.land_id === selectedLand.id)}
+          onScheduleSaved={() => refreshCropSchedules(selectedLand.id)}
+          onBack={() => {
+            setShowLandDashboard(false);
+            setSelectedLand(null);
+          }}
+        />
+      );
+    }
+
+    // Show enhanced land management
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
+        {/* Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white shadow-sm border-b"
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Farmer Dashboard</h1>
+                <p className="text-gray-600">Welcome back, {user?.name}!</p>
+              </div>
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowMarketplace(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <ShoppingCart size={20} />
+                  Marketplace
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowAIChat(true)}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                >
+                  <MessageCircle size={20} />
+                  AI Assistant
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <EnhancedLandManagement
+            user={user}
+            lands={lands}
+            cropSchedules={cropSchedules}
+            onLandAdded={(newLand) => {
+              setLands(prev => [...prev, newLand]);
+            }}
+            onLandSelected={(land) => {
+              setSelectedLand(land);
+              setShowLandDashboard(true);
+            }}
+          />
         </div>
+
+        {/* AI Chat Assistant */}
+        <AIChatAssistant
+          selectedLand={selectedLand}
+          isOpen={showAIChat}
+          onToggle={() => setShowAIChat(!showAIChat)}
+          onClose={() => setShowAIChat(false)}
+        />
       </div>
-
-      {currentView === 'lands' && (
-        <div className="section">
-          <h2>My Lands</h2>
-          <div className="add-form">
-            <h3>Add New Land</h3>
-            <form onSubmit={handleAddLand} className="form-grid">
-              <input
-                type="text"
-                placeholder="Land Name"
-                value={newLand.name}
-                onChange={(e) => setNewLand({ ...newLand, name: e.target.value })}
-                required
-              />
-              <input
-                type="number"
-                placeholder="Size (acres)"
-                value={newLand.size}
-                onChange={(e) => setNewLand({ ...newLand, size: e.target.value })}
-                required
-              />
-              <input
-                type="text"
-                placeholder="Soil Type"
-                value={newLand.soil_type}
-                onChange={(e) => setNewLand({ ...newLand, soil_type: e.target.value })}
-                required
-              />
-              <input
-                type="text"
-                placeholder="Crops (comma-separated)"
-                value={newLand.crops}
-                onChange={(e) => setNewLand({ ...newLand, crops: e.target.value })}
-              />
-              <button type="submit" className="btn btn-primary">Add Land</button>
-            </form>
-          </div>
-          <div className="items-grid">
-            {lands.map(land => (
-              <div key={land.id} className="item-card">
-                <h4>{land.name}</h4>
-                <p>Size: {land.size} acres</p>
-                <p>Soil: {land.soil_type}</p>
-                <p>Crops: {land.crops.join(', ')}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {currentView === 'products' && (
-        <div className="section">
-          <h2>My Products</h2>
-          <div className="add-form">
-            <h3>Add New Product</h3>
-            <form onSubmit={handleAddProduct} className="form-grid">
-              <input
-                type="text"
-                placeholder="Product Name"
-                value={newProduct.name}
-                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                required
-              />
-              <input
-                type="text"
-                placeholder="Description"
-                value={newProduct.description}
-                onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                required
-              />
-              <input
-                type="number"
-                placeholder="Price"
-                value={newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                required
-              />
-              <select
-                value={newProduct.unit}
-                onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-              >
-                <option value="kg">kg</option>
-                <option value="ton">ton</option>
-                <option value="piece">piece</option>
-                <option value="bag">bag</option>
-              </select>
-              <input
-                type="number"
-                placeholder="Quantity"
-                value={newProduct.quantity}
-                onChange={(e) => setNewProduct({ ...newProduct, quantity: e.target.value })}
-                required
-              />
-              <input
-                type="text"
-                placeholder="Category"
-                value={newProduct.category}
-                onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                required
-              />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileUpload(e, (base64) => setNewProduct({ ...newProduct, image_base64: base64 }))}
-              />
-              <button type="submit" className="btn btn-primary">Add Product</button>
-            </form>
-          </div>
-          <div className="items-grid">
-            {products.map(product => (
-              <div key={product.id} className="item-card">
-                {product.image_base64 && (
-                  <img src={`data:image/jpeg;base64,${product.image_base64}`} alt={product.name} />
-                )}
-                <h4>{product.name}</h4>
-                <p>{product.description}</p>
-                <p>Price: ${product.price} per {product.unit}</p>
-                <p>Quantity: {product.quantity} {product.unit}</p>
-                <p>Category: {product.category}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {currentView === 'disease-detection' && (
-        <div className="section">
-          <h2>Disease Detection</h2>
-          <div className="add-form">
-            <h3>Analyze Crop Image</h3>
-            <form onSubmit={handleDiseaseDetection} className="form-grid">
-              <input
-                type="text"
-                placeholder="Crop Name"
-                value={diseaseForm.crop_name}
-                onChange={(e) => setDiseaseForm({ ...diseaseForm, crop_name: e.target.value })}
-                required
-              />
-              <select
-                value={diseaseForm.land_id}
-                onChange={(e) => setDiseaseForm({ ...diseaseForm, land_id: e.target.value })}
-              >
-                <option value="">Select Land (Optional)</option>
-                {lands.map(land => (
-                  <option key={land.id} value={land.id}>{land.name}</option>
-                ))}
-              </select>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileUpload(e, (base64) => setDiseaseForm({ ...diseaseForm, image_base64: base64 }))}
-                required
-              />
-              <button type="submit" className="btn btn-primary">Analyze Disease</button>
-            </form>
-          </div>
-          <div className="items-grid">
-            {diseaseReports.map(report => (
-              <div key={report.id} className="item-card">
-                <img src={`data:image/jpeg;base64,${report.image_base64}`} alt={report.crop_name} />
-                <h4>{report.crop_name}</h4>
-                <p>Confidence: {report.confidence}%</p>
-                <div className="diagnosis">
-                  <h5>AI Diagnosis:</h5>
-                  <p>{report.ai_diagnosis}</p>
-                </div>
-                <div className="recommendations">
-                  <h5>Recommendations:</h5>
-                  {report.recommendations.map((rec, idx) => (
-                    <p key={idx}>{rec}</p>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {currentView === 'plant-planning' && (
-        <div className="section">
-          <h2>Plant Planning</h2>
-          <div className="add-form">
-            <h3>Create Plant Plan</h3>
-            <form onSubmit={handleCreatePlantPlan} className="form-grid">
-              <select
-                value={plantPlanForm.land_id}
-                onChange={(e) => setPlantPlanForm({ ...plantPlanForm, land_id: e.target.value })}
-                required
-              >
-                <option value="">Select Land</option>
-                {lands.map(land => (
-                  <option key={land.id} value={land.id}>{land.name}</option>
-                ))}
-              </select>
-              <select
-                value={plantPlanForm.season}
-                onChange={(e) => setPlantPlanForm({ ...plantPlanForm, season: e.target.value })}
-              >
-                <option value="spring">Spring</option>
-                <option value="summer">Summer</option>
-                <option value="fall">Fall</option>
-                <option value="winter">Winter</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Preferred Crops (comma-separated)"
-                value={plantPlanForm.preferred_crops}
-                onChange={(e) => setPlantPlanForm({ ...plantPlanForm, preferred_crops: e.target.value })}
-                required
-              />
-              <textarea
-                placeholder="Goals and Requirements"
-                value={plantPlanForm.goals}
-                onChange={(e) => setPlantPlanForm({ ...plantPlanForm, goals: e.target.value })}
-                required
-              />
-              <button type="submit" className="btn btn-primary">Create Plan</button>
-            </form>
-          </div>
-          <div className="items-grid">
-            {plantPlans.map(plan => (
-              <div key={plan.id} className="item-card">
-                <h4>{plan.season.charAt(0).toUpperCase() + plan.season.slice(1)} Plan</h4>
-                <p>Crops: {plan.crops.join(', ')}</p>
-                <p>Goals: {plan.plan_details}</p>
-                <div className="ai-recommendations">
-                  <h5>AI Recommendations:</h5>
-                  <p>{plan.ai_recommendations}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   const renderCustomerDashboard = () => (
     <div className="dashboard-container">
@@ -810,15 +791,50 @@ function App() {
       </header>
 
       <main className="main">
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="success-message">{success}</div>}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg shadow-lg max-w-md"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-red-500">⚠️</span>
+              <span>{error}</span>
+              <button 
+                onClick={() => setError('')} 
+                className="ml-auto text-red-500 hover:text-red-700"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-100 border border-green-400 text-green-700 px-6 py-3 rounded-lg shadow-lg max-w-md"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✅</span>
+              <span>{success}</span>
+              <button 
+                onClick={() => setSuccess('')} 
+                className="ml-auto text-green-500 hover:text-green-700"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
         
         {currentView === 'home' && renderHome()}
         {currentView === 'login' && renderLogin()}
         {currentView === 'register' && renderRegister()}
         {currentView === 'dashboard' && user?.user_type === 'farmer' && renderFarmerDashboard()}
         {currentView === 'dashboard' && user?.user_type === 'customer' && renderCustomerDashboard()}
-        {user?.user_type === 'farmer' && ['lands', 'products', 'disease-detection', 'plant-planning'].includes(currentView) && renderFarmerDashboard()}
       </main>
     </div>
   );
