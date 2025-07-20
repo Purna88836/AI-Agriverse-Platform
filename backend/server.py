@@ -22,6 +22,9 @@ from bson import ObjectId
 # Load environment variables from .env file
 load_dotenv()
 
+# Get port from environment (Railway sets PORT env var)
+PORT = int(os.environ.get("PORT", 8000))
+
 # Initialize FastAPI app
 app = FastAPI(title="AgriVerse API", version="1.0.0")
 
@@ -37,7 +40,7 @@ app.add_middleware(
 # Security setup
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = "your-secret-key-here"
+SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 
 # Database setup
@@ -3700,4 +3703,4 @@ def generate_growth_trends(days_elapsed: int, progress: float) -> Dict[str, str]
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
