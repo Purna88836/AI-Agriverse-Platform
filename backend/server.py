@@ -8,7 +8,8 @@ from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Body, sta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
+from pymongo import AsyncMongoClient
 from passlib.context import CryptContext
 import jwt
 import openai
@@ -27,6 +28,41 @@ PORT = int(os.environ.get("PORT", 8000))
 
 # Initialize FastAPI app
 app = FastAPI(title="AgriVerse API", version="1.0.0")
+
+@app.on_event("startup")
+async def startup_db_client():
+    global client, db, users_collection, lands_collection, products_collection, disease_reports_collection, plant_plans_collection, crop_schedules_collection, alerts_collection, crop_planning_history_collection, cultivation_cycles_collection, cycle_tasks_collection, growth_data_collection
+    
+    try:
+        # Test the connection
+        await client.admin.command('ping')
+        print("✅ MongoDB connection successful!")
+    except Exception as e:
+        print(f"❌ MongoDB connection failed: {e}")
+        # Try alternative connection string format
+        try:
+            alt_url = MONGO_URL.replace('mongodb+srv://', 'mongodb://')
+            client = AsyncMongoClient(alt_url)
+            db = client[DATABASE_NAME]
+            
+            # Reinitialize collections
+            users_collection = db.users
+            lands_collection = db.lands
+            products_collection = db.products
+            disease_reports_collection = db.disease_reports
+            plant_plans_collection = db.plant_plans
+            crop_schedules_collection = db.crop_schedules
+            alerts_collection = db.alerts
+            crop_planning_history_collection = db.crop_planning_history
+            cultivation_cycles_collection = db.cultivation_cycles
+            cycle_tasks_collection = db.cycle_tasks
+            growth_data_collection = db.growth_data
+            
+            await client.admin.command('ping')
+            print("✅ MongoDB connection successful with alternative URL!")
+        except Exception as e2:
+            print(f"❌ Alternative connection also failed: {e2}")
+            print("⚠️ Continuing with basic connection...")
 
 # CORS configuration
 app.add_middleware(
@@ -47,21 +83,8 @@ ALGORITHM = "HS256"
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DATABASE_NAME = "agriverse"
 
-# Configure MongoDB client with SSL settings for Render
-try:
-    client = AsyncIOMotorClient(
-        MONGO_URL,
-        serverSelectionTimeoutMS=10000,
-        tlsAllowInvalidCertificates=True
-    )
-    # Test the connection
-    client.admin.command('ping')
-    print("✅ MongoDB connection successful!")
-except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    # Fallback connection without SSL for development
-    client = AsyncIOMotorClient(MONGO_URL)
-    
+# Initialize MongoDB client
+client = AsyncMongoClient(MONGO_URL)
 db = client[DATABASE_NAME]
 
 # Collections
@@ -370,11 +393,12 @@ WEATHER_BASE_URL = "https://api.open-meteo.com/v1"
 print("🌤️ Using Open-Meteo API - Completely free weather data!")
 print("   No API key required, no rate limits for reasonable usage")
 # OpenAI API setup
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
 def get_chatgpt_client():
     from openai import OpenAI
-    return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
+    return OpenAI(api_key=api_key)
 
 # Weather API functions
 async def get_weather_data(lat: float, lng: float) -> dict:
