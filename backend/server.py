@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from pymongo import AsyncMongoClient
+import pymongo
 from passlib.context import CryptContext
 import jwt
 import openai
@@ -44,12 +45,7 @@ async def startup_db_client():
             alt_url = MONGO_URL.replace('mongodb+srv://', 'mongodb://')
             client = AsyncMongoClient(
                 alt_url,
-                tls=True,
-                tlsAllowInvalidCertificates=False,
-                tlsAllowInvalidHostnames=False,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=10000,
-                socketTimeoutMS=10000
+                server_api=pymongo.ServerApi('1')
             )
             db = client[DATABASE_NAME]
             
@@ -91,15 +87,10 @@ ALGORITHM = "HS256"
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DATABASE_NAME = "agriverse"
 
-# Initialize MongoDB client with SSL configuration
+# Initialize MongoDB client with proper Atlas configuration
 client = AsyncMongoClient(
     MONGO_URL,
-    tls=True,
-    tlsAllowInvalidCertificates=False,
-    tlsAllowInvalidHostnames=False,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=10000,
-    socketTimeoutMS=10000
+    server_api=pymongo.ServerApi('1')
 )
 db = client[DATABASE_NAME]
 
