@@ -42,7 +42,15 @@ async def startup_db_client():
         # Try alternative connection string format
         try:
             alt_url = MONGO_URL.replace('mongodb+srv://', 'mongodb://')
-            client = AsyncMongoClient(alt_url)
+            client = AsyncMongoClient(
+                alt_url,
+                tls=True,
+                tlsAllowInvalidCertificates=False,
+                tlsAllowInvalidHostnames=False,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=10000
+            )
             db = client[DATABASE_NAME]
             
             # Reinitialize collections
@@ -83,8 +91,16 @@ ALGORITHM = "HS256"
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DATABASE_NAME = "agriverse"
 
-# Initialize MongoDB client
-client = AsyncMongoClient(MONGO_URL)
+# Initialize MongoDB client with SSL configuration
+client = AsyncMongoClient(
+    MONGO_URL,
+    tls=True,
+    tlsAllowInvalidCertificates=False,
+    tlsAllowInvalidHostnames=False,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=10000,
+    socketTimeoutMS=10000
+)
 db = client[DATABASE_NAME]
 
 # Collections
