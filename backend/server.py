@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from pymongo import AsyncMongoClient
-import pymongo
+from pymongo.server_api import ServerApi
 from passlib.context import CryptContext
 import jwt
 import openai
@@ -45,7 +45,7 @@ async def startup_db_client():
             alt_url = MONGO_URL.replace('mongodb+srv://', 'mongodb://')
             client = AsyncMongoClient(
                 alt_url,
-                server_api=pymongo.ServerApi('1')
+                server_api=ServerApi('1')
             )
             db = client[DATABASE_NAME]
             
@@ -90,7 +90,7 @@ DATABASE_NAME = "agriverse"
 # Initialize MongoDB client with proper Atlas configuration
 client = AsyncMongoClient(
     MONGO_URL,
-    server_api=pymongo.ServerApi('1')
+    server_api=ServerApi('1')
 )
 db = client[DATABASE_NAME]
 
